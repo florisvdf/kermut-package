@@ -63,7 +63,6 @@ def _evaluate_dms(cfg: DictConfig) -> None:
     y_train, y_test = (
         standardize(y_train, y_test) if cfg.data.standardize else (y_train, y_test)
     )
-
     x_toks_train, x_toks_test = split_inputs(train_idx, test_idx, x_toks)
     x_embed_train, x_embed_test = split_inputs(train_idx, test_idx, x_embed)
     x_zero_shot_train, x_zero_shot_test = split_inputs(train_idx, test_idx, x_zero_shot)

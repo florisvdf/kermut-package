@@ -21,8 +21,15 @@ def _load_zero_shot(
         df_zero = pd.read_csv(Path(cfg.data.paths.zero_shot) / f"{DMS_id}.csv")[
             [zero_shot_col, "mutant"]
         ]
-        df = pd.merge(left=df, right=df_zero, on="mutant", how="left")
-        df = df.groupby("mutant").mean(numeric_only=True).reset_index(drop=True)
+        # df = pd.merge(left=df, right=df_zero, on="mutant", how="left")
+        # df = df.groupby("mutant").mean(numeric_only=True).reset_index(drop=True)
+
+        # Necessary fix when duplicate sequences exist and number of rows must be preserved
+        mapping = df_zero.drop_duplicates(subset="mutant")[
+            ["mutant", zero_shot_col]
+        ].set_index("mutant")[zero_shot_col].to_dict()
+        df[zero_shot_col] = df["mutant"].map(mapping)
+
         x_zero_shot = torch.tensor(df[zero_shot_col].values, dtype=torch.float32)
         return x_zero_shot
     else:
