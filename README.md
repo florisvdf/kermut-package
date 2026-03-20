@@ -1,183 +1,144 @@
-# Kermut
+# kermut-package
 
-This is the official code repository for the NeurIPS 2024 Spotlight paper [_Kermut: Composite kernel regression for protein variant effects_](https://proceedings.neurips.cc/paper_files/paper/2024/hash/34547650b2ca69d91f3b3c3ae8b21962-Abstract-Conference.html).
+This repository is a fork of the [original repository](https://github.com/petergroth/kermut) 
+providing the implementation of 
+[Kermut: Composite kernel regression for protein variant effects](https://doi.org/10.48550/arXiv.2407.00002).
+It acts as an installable wrapper project that allows users to easily train and evaluate 
+Kermut on any protein variant effect dataset, provided that:
+
+- A structure exists from which the variants are derived
+- The sequences are all of equal length
+- Each sequence has at least one mutation
+
+Additionally, this project adds preferential training support to Kermut. This replaces the 
+regression training objective with a pairwise preference prediction objective, matching 
+the implementation described in [Preference learning with Gaussian processes](https://doi.org/10.1145/1102351.1102369),
+and built using [`botorch`](https://botorch.readthedocs.io/en/latest/models.html#module-botorch.models.pairwise_gp).
 
 
-## Overview
-Kermut is a carefully constructed Gaussian process which obtains state-of-the-art performance for supervised variant effect prediction on ProteinGym's substitution benchmark while providing well-calibrated uncertainties.
+## Structure
 
-## Reproducibility
+This codebase tries to preserve as much as possible of the original source code, which 
+is stored under `src/kermut/kermut`. `src/kermut/pg_model` acts as a wrapper module, providing a 
+single entrypoint for training and evaluation through `src/kermut/pg_model/kermut_run.py`, 
+and also contains utilities to provide preferential training support, such as preference 
+pair sampling algorithms.
 
-The `main` branch has been rewritten and restructured for ease of use and clarity. Implementation differences might results in minor numerical differences to those of the paper. To reproduce the paper results, instead use the `reproduce` branch and consult the extensive README in that branch:
-```bash
-git clone -b reproduce git@github.com:petergroth/kermut.git
-```
 ## Installation
-```bash
-git clone git@github.com:petergroth/kermut.git
+
+```shell
+git clone https://github.com/florisvdf/kermut-package.git
 cd kermut
-conda env create --file environment.yaml
-conda activate kermut_envs
-pip install -e .
+uv sync
 ```
 
-### Optional 
-To run Kermut from scratch without precomputed resources, e.g., for a new dataset, the ProteinMPNN repository must be installed. Additionally, the ESM-2 650M parameter model must be saved locally: 
-#### ProteinMPNN
-Kermut leverages structure-conditioned amino acid distributions from [ProteinMPNN](https://www.science.org/doi/10.1126/science.add2187), which can has to installed from the [official repository](https://github.com/dauparas/ProteinMPNN). An environment variable pointing to the installation location can then be set for later use:
+Or directly install the project using your favorite package manager, e.g. pip:
 
-```bash
-export PROTEINMPNN_DIR=<path-to-ProteinMPNN-installation>
+```shell
+pip install git+https://github.com/florisvdf/kermut-package
 ```
 
-#### ESM-2 models 
-Kermut leverages protein sequence embeddings and zero-shot scores extracted from ESM-2 ([paper](https://www.science.org/doi/10.1126/science.ade2574), [repo](https://github.com/facebookresearch/esm)). We concretely use the 650M parameter model (`esm2_t33_650M_UR50D`). While the ESM repository is installed above /via the yml-file), the model weights should be downloaded separately and placed in the `models` directory:
+[ProteinMPNN](https://github.com/dauparas/ProteinMPNN) must be installed to compute 
+structure-conditioned amino acid distributions. This can be done by cloning the repository 
+and passing its path to an environment variable named `PROTEINMPNN_DIR`.
 
-```bash
-curl -o models/esm2_t33_650M_UR50D.pt https://dl.fbaipublicfiles.com/fair-esm/models/esm2_t33_650M_UR50D.pt
+## Usage
 
-curl -o models/esm2_t33_650M_UR50D-contact-regression.pt https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t33_650M_UR50D-contact-regression.pt
+Kermut can be trained provided a dataframe with a `sequence` column storing sequences, 
+a `split` column storing `train` and `test` values and an arbitrarily named column storing 
+the values to model stored at `data_dir/<dataset_name>.csv`. 
+
+
+```console
+$ python src/kermut/pg_model/kermut_run.py --help
+
+ Usage: kermut_run.py [OPTIONS]                                                                                                                                                      
+                                                                                                                                                                                     
+╭─ Options ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --dataset-name                                              TEXT     Name of the dataset. It should match the csv storing the sequence-property pairs. [required]              │
+│ *  --target                                                    TEXT     Name of the columns storing the property values to fit. [required]                                        │
+│ *  --reference-sequence                                        TEXT     Sequence of the parent protein. [required]                                                                │
+│ *  --pdb-file                                                  TEXT     PDB file to extract 3D coordinates from. [required]                                                       │
+│ *  --data-dir                                                  TEXT     Directory storing the dataset and to save the precomputed artifacts to. [required]                        │
+│ *  --output-path                                               TEXT     Path to save the predictions and metrics to. [required]                                                   │
+│    --prepare-artifacts               --no-prepare-artifacts             Whether or not artifacts (kernel inputs) should be computed. [default: prepare-artifacts]                 │
+│    --n-steps                                                   INTEGER  Number of optimization steps for fitting the Gaussian Process. [default: 150]                             │
+│    --preferential                    --no-preferential                  Train Kermut in preferential mode. [default: no-preferential]                                             │
+│    --preference-sampling-strategy                              TEXT     How to sample preference for training Kermut in preferential mode. Currently only uniform sampling is     │
+│                                                                         supported. Valid values are 'uniform_{avg_degree}' where avg_degree is the average degree of the          │
+│                                                                         resulting preference graph.                                                                               │
+│    --device                                                    TEXT     PyTorch backend device [default: cpu]                                                                     │
+│    --install-completion                                                 Install completion for the current shell.                                                                 │
+│    --show-completion                                                    Show completion for the current shell, to copy it or customize the installation.                          │
+│    --help                                                               Show this message and exit.                                                                               │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯```
 ```
 
-## Data access
-This section describes how to access the data that was used to generate the results. To reproduce _all_ results from scratch, follow all steps in this section and in the [Data preprocessing](#data-preprocessing) section. To reproduce the benchmark results using precomputed resources (ESM-2 embeddings, conditional amino-acid distributions, etc.) see the section on [precomputed resources](#precomputed-resources).
+Alternatively, import `main` from `kermut_run.py` in your script:
 
-Kermut is evaluated on the ProteinGym benchmark ([paper](https://papers.nips.cc/paper_files/paper/2023/hash/cac723e5ff29f65e3fcbb0739ae91bee-Abstract-Datasets_and_Benchmarks.html), [repo](https://github.com/OATML-Markslab/ProteinGym)).
-For full details on downloading the relevant data, please see the ProteinGym [resources](https://github.com/OATML-Markslab/ProteinGym?tab=readme-ov-file#resources). In the following, commands are provided to extract the relevant data. 
-_If the ProteinGym links can no longer be accessed, please refer to the [official ProteinGym repository](https://github.com/OATML-Markslab/ProteinGym)._
+```python
+from kermut.pg_model.kermut_run import main as train
 
-- __Reference file__: A [reference file](https://github.com/OATML-Markslab/ProteinGym/blob/main/reference_files/DMS_substitutions.csv) with details on all assays can be downloaded from the ProteinGym repo and should be saved as `data/DMS_substitutions.csv`
 
-The file can be downloaded by running the following:
-```bash
-curl -o data/DMS_substitutions.csv https://raw.githubusercontent.com/OATML-Markslab/ProteinGym/main/reference_files/DMS_substitutions.csv
+train(
+    dataset_name="my_protein",
+    target="my_target", 
+    reference_sequence="MYREFERENCESEQWENCE",
+    pdb_file="path/to/my_structure.pdb",
+    data_dir="path/to/my/artifacts", 
+    output_path="path/to/my/outputs",
+    n_steps=150, 
+)
 ```
 
-- __Assay data__: All assays (with CV folds) can be downloaded and extracted to `data`. Run the following to download and extract all single-mutant assays. Assays will be placed in `data/cv_folds_singles_substitutions`:
-```bash
-# Download zip archive
-curl -o cv_folds_singles_substitutions.zip https://marks.hms.harvard.edu/proteingym/ProteinGym_v1.3/cv_folds_singles_substitutions.zip
-# Unpack and remove zip archive
-unzip cv_folds_singles_substitutions.zip -d data
-rm cv_folds_singles_substitutions.zip
+This wil train Kermut and evaluate in on both the training and test set. Predictions and metrics
+are saved to `path/to/my/outputs`. A demo of this usage can be found under `tests/kermut/pg_model/test_kermut_run.py`, 
+which users can run with `pytest`:
+
+```shell
+pytest -xvs tests/kermut/pg_model/test_kermut_run.py
 ```
 
+In addition, users can compute all necessary artifacts at training time, or precompute 
+artifacts with `src/kermut/pg_model/scripts/precompute_artifacts.py`:
 
-- __PDBs__: All predicted structure files are downloaded and placed in `data/structures/pdbs`. PDBs are accessed via `Predicted 3D structures from inverse-folding models` in ProteinGym.
+```console
+$ python src/kermut/pg_model/scripts/precompute_artifacts.py --help
 
-```bash
-# Download zip archive
-curl -o ProteinGym_AF2_structures.zip https://marks.hms.harvard.edu/proteingym/ProteinGym_v1.3/ProteinGym_AF2_structures.zip
-# Unpack and remove zip archive
-unzip ProteinGym_AF2_structures.zip -d data/structures/pdbs
-rm ProteinGym_AF2_structures.zip
+ Usage: precompute_artifacts.py [OPTIONS]                                                                                                                                            
+                                                                                                                                                                                     
+╭─ Options ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --dataset-name              TEXT     Name of the dataset. Used for naming the dataframe containing zero shot scores [required]                                                 │
+│ *  --data-dir                  TEXT     Directory storing the dataset and to save the precomputed artifacts to. [required]                                                        │
+│ *  --pdb-file                  TEXT     PDB file to extract 3D coordinates from [required]                                                                                        │
+│ *  --reference-sequence        TEXT     Reference sequence [required]                                                                                                             │
+│    --toks-per-batch            INTEGER  Number of tokens to process per batch [default: 16384]                                                                                    │
+│    --device                    TEXT     PyTorch backend device [default: cpu]                                                                                                     │
+│    --install-completion                 Install completion for the current shell.                                                                                                 │
+│    --show-completion                    Show completion for the current shell, to copy it or customize the installation.                                                          │
+│    --help                               Show this message and exit.                                                                                                               │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-- __Zero-shot scores__: For the zero-shot mean function, precomputed scores can be downloaded and placed in `zero_shot_fitness_predictions`, where each zero-shot method has its own directory. The precomputed zero-shot scores from ProteinGym can be accessed via `Zero-shot DMS Model scores - Substitutions`. __NOTE__: The full zip archive with all scores takes up approximately 44GB of storage. Alternatively, the zero-shot scores for the 650M parameter ESM-2 model is included in the [precomputed resources](#precomputed-resources), which in total is only approximately 4GB.
+Training Kermut without computing artifacts at training time assumes that the artifacts 
+are stored as follows:
 
-```bash
-# Download zip archive
-curl -o zero_shot_substitutions_scores.zip https://marks.hms.harvard.edu/proteingym/ProteinGym_v1.3/zero_shot_substitutions_scores.zip
-unzip zero_shot_substitutions_scores.zip -d data/zero_shot_fitness_predictions
-# Unpack and remove zip archive
-rm zero_shot_substitutions_scores.zip
-```
-## Precomputed resources
-All outputs from the preprocessing procedure (i.e., precomputed ESM-2 embeddings, conditional amino acid distributions, processed coordinate files, and zero-shot scores from ESM-2) can be readily accessed via a zip-archive hosted by the Electronic Research Data Archive (ERDA) by the University of Copenhagen using the following [link](https://sid.erda.dk/sharelink/c2EWrbGSCV). The file takes up approximately 4GB. To download and extract the data, run the following:
 
-```bash
-# Download zip archive
-curl -o kermut_data.zip https://sid.erda.dk/share_redirect/c2EWrbGSCV/kermut_data.zip
-# Unpack and remove zip archive
-unzip kermut_data.zip && rm kermut_data.zip
-```
-## Data preprocessing
-### Sequence embeddings
-After downloading and extracting the relevant data in the [Data access section](#data-access), ESM-2 embeddings can be generated via:
-
-```bash
-python -m kermut.cmdline.preprocess_data.extract_esm2_embeddings \
-    dataset=all 
-```
-
-To generate embeddings for an individual dataset (e.g., `BLAT_ECOLX_Stiffler_2015`), run
-```bash
-python -m kermut.cmdline.preprocess_data.extract_esm2_embeddings \
-    dataset=single \
-    dataset.single.use_id=true \
-    dataset.single.id=BLAT_ECOLX_Stiffler_2015
-```
-To generate embeddings via index (i.e., row index in `DMS_substitutions.csv`), run
-```bash
-python -m kermut.cmdline.preprocess_data.extract_esm2_embeddings \
-    dataset=single \
-    dataset.single.id=23
-```
-
-The embeddings are located in `data/embeddings/substitutions_singles/ESM2` (for the single-mutant assays).
-
-### Structure-conditioned amino acid distributions
-
-The structure-conditioned amino acid distributions for all residues and assays, can be computed with ProteinMPNN via
+```console
+.
+├── conditional_probs
+│   ├── <dataset_name>.npy
+├── embeddings
+│   └── <dataset_name>.h5
+├── <dataset_name>.csv
+├── structures
+│   └── coords
+│       └── <dataset_name>.npy
+└── zero_shot_fitness_predictions
+    └── <dataset_name>.csv
 
 ```
-bash example_scripts/conditional_probabilities.sh
-```
-For a single dataset, see `example_scripts/conditional_probabilities_single.sh` or `example_scripts/conditional_probabilities_all.sh`. This generates per-assay directories in `data/conditional_probs/raw_ProteinMPNN_outputs`. After this, postprocessing for easier access is performed via
-```bash
-python -m kermut.cmdline.preprocess_data.extract_ProteinMPNN_probs \ 
-    dataset=all
-```
-This generates per-assay `npy`-files in `data/conditional_probs/ProteinMPNN`.
 
-### 3D coordinates
-Lastly, the 3D coordinates can be extracted from each PDB file via
-```bash
-python -m kermut.cmdline.preprocess_data.extract_3d_coords \
-    dataset=all
-```
-This saves `npy`-files for each assay in `data/structures/coords`. 
-For single assays, use same inputs as for embeddings.
-
-### Optional: Zero-shot scores
-If not relying on pre-computed zero-shot scores from ProteinGym, they can be computed for ESM-2 via:
-```bash
-python -m kermut.cmdline.preprocess_data.extract_esm2_zero_shots \
-    dataset=all
-```
-# Usage
-
-The implementation of Kermut relies on [Hydra](https://hydra.cc/). 
-Configuration files are found in `kermut/hydra_configs`.
-Data paths are defined in `data/paths.yaml` and must match your setup. 
-
-To evaluate Kermut on the full benchmark, run the following
-```bash
-python proteingym_benchmark.py --multirun \
-    dataset=benchmark \
-    cv_scheme=fold_random_5,fold_modulo_5,fold_contiguous_5 \
-    kernel=kermut  # Default
-```
-
-To evaluate an alternative kernel (e.g., `kermut_constant_mean` as defined in `kermut/hydra_configs/kernel/kermut_constant_mean.yaml` ) on DMS assay with index 9, run
-```bash
-python proteingym_benchmark.py --multirun \
-    dataset=single \
-    dataset.single.id=9 \
-    cv_scheme=fold_random_5,fold_modulo_5,fold_contiguous_5 \
-    kernel=kermut_constant_mean
-```
-
-## Postprocessing
-To compute Spearman correlation and MSE per assay and cv-scheme, run
-```bash
-python -m kermut.cmdline.process_results.process_model_scores \
-    dataset=benchmark
-```
-This will compute results for all models stored in the `model_names.benchmark` list in `kermut/hydra_configs/postprocessing/default.yaml`.
-For a single model, run
-```bash
-python -m kermut.cmdline.process_results.process_model_scores \
-    dataset=benchmark \
-    "model_names=[kermut]"
-```
+## Known limitations
+- Currently only a fixed kernel setting matching the model reported in the original publication is available.
+- Kermut struggles with highly combinatorial datasets.
