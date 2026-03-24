@@ -25,9 +25,11 @@ def _load_zero_shot(
         # df = df.groupby("mutant").mean(numeric_only=True).reset_index(drop=True)
 
         # Necessary fix when duplicate sequences exist and number of rows must be preserved
-        mapping = df_zero.drop_duplicates(subset="mutant")[
-            ["mutant", zero_shot_col]
-        ].set_index("mutant")[zero_shot_col].to_dict()
+        mapping = (
+            df_zero.drop_duplicates(subset="mutant")[["mutant", zero_shot_col]]
+            .set_index("mutant")[zero_shot_col]
+            .to_dict()
+        )
         df[zero_shot_col] = df["mutant"].map(mapping)
 
         x_zero_shot = torch.tensor(df[zero_shot_col].values, dtype=torch.float32)

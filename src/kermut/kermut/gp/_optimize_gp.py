@@ -51,7 +51,12 @@ def optimize_gp(
     if preferential:
         mll = PairwiseLaplaceMarginalLogLikelihood(likelihood, gp)
         # This somehow results in error that data is different from gp data, even though seems equal when comparing
-        # x_train = (torch.cat([x.unsqueeze(-1) if len(x.shape) == 1 else x for x in train_inputs], dim=1),)
+        # x_train = (
+        #     torch.cat(
+        #         [x.unsqueeze(-1) if len(x.shape) == 1 else x for x in train_inputs],
+        #         dim=1,
+        #     ),
+        # )
         x_train = (gp.datapoints,)
     else:
         mll = ExactMarginalLogLikelihood(likelihood, gp)

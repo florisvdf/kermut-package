@@ -40,9 +40,7 @@ def _evaluate_dms(cfg: DictConfig) -> None:
     DMS_id = cfg.DMS_id
     target_seq = cfg.target_seq
     device = "cuda" if cfg.use_gpu and torch.cuda.is_available() else "cpu"
-    df, y, x_toks, x_embed, x_zero_shot = prepare_GP_inputs(
-        cfg, DMS_id
-    )
+    df, y, x_toks, x_embed, x_zero_shot = prepare_GP_inputs(cfg, DMS_id)
     gp_inputs = prepare_GP_kwargs(
         cfg, DMS_id, target_seq, dtype=torch.get_default_dtype()
     )
@@ -74,12 +72,6 @@ def _evaluate_dms(cfg: DictConfig) -> None:
 
     if cfg.preferential:
         torch.set_default_dtype(torch.float64)
-        train_inputs = tuple(
-            [x.to(device=device, dtype=torch.get_default_dtype()) for x in train_inputs]
-        )
-        test_inputs = tuple(
-            [x.to(device=device, dtype=torch.get_default_dtype()) for x in test_inputs]
-        )
         sampler = pair_sampling_factory(
             cfg.preference_sampling_strategy,
             split=df.get("split"),
@@ -88,7 +80,12 @@ def _evaluate_dms(cfg: DictConfig) -> None:
         train_targets = torch.tensor(
             sampler.sample(train_targets.cpu().numpy()), device=device
         )
-
+        train_inputs = tuple(
+            [x.to(device=device, dtype=torch.get_default_dtype()) for x in train_inputs]
+        )
+        test_inputs = tuple(
+            [x.to(device=device, dtype=torch.get_default_dtype()) for x in test_inputs]
+        )
     gp, likelihood = instantiate_gp(
         cfg=cfg,
         train_inputs=train_inputs,
@@ -146,9 +143,7 @@ def main(
     ],
     target: Annotated[
         str,
-        typer.Option(
-            help="Name of the columns storing the property values to fit."
-        ),
+        typer.Option(help="Name of the columns storing the property values to fit."),
     ],
     reference_sequence: Annotated[
         str,
@@ -167,25 +162,32 @@ def main(
     ],
     output_path: Annotated[
         str,
-        typer.Option(
-            help="Path to save the predictions and metrics to."
-        ),
+        typer.Option(help="Path to save the predictions and metrics to."),
     ],
-    prepare_artifacts: Annotated[bool, typer.Option(
-        help="Whether or not artifacts (kernel inputs) should be computed."
-    )] = True,
-    n_steps: Annotated[int, typer.Option(
-        help="Number of optimization steps for fitting the Gaussian Process."
-    )] = 150,
-    preferential: Annotated[bool, typer.Option(
-        help="Train Kermut in preferential mode."
-    )] = False,
-    preference_sampling_strategy: Annotated[str, typer.Option(
-        help="How to sample preference for training Kermut in preferential mode. "
-             "Currently only uniform sampling is supported. Valid values are "
-             "'uniform_{avg_degree}' where avg_degree is the average degree of the "
-             "resulting preference graph."
-    )] = None,
+    prepare_artifacts: Annotated[
+        bool,
+        typer.Option(
+            help="Whether or not artifacts (kernel inputs) should be computed."
+        ),
+    ] = True,
+    n_steps: Annotated[
+        int,
+        typer.Option(
+            help="Number of optimization steps for fitting the Gaussian Process."
+        ),
+    ] = 150,
+    preferential: Annotated[
+        bool, typer.Option(help="Train Kermut in preferential mode.")
+    ] = False,
+    preference_sampling_strategy: Annotated[
+        str,
+        typer.Option(
+            help="How to sample preference for training Kermut in preferential mode. "
+            "Currently only uniform sampling is supported. Valid values are "
+            "'uniform_{avg_degree}' where avg_degree is the average degree of the "
+            "resulting preference graph."
+        ),
+    ] = None,
     device: Annotated[str, typer.Option(help="PyTorch backend device")] = "cpu",
 ) -> None:
     dataset_path = str(Path(data_dir) / f"{dataset_name}.csv")
@@ -215,7 +217,9 @@ def main(
         "preferential": preferential,
         "preference_sampling_strategy": preference_sampling_strategy,
     }
-    prepare_hydra_configs(HYDRA_CONFIG_PATH, HYDRA_TEMP_CONFIG_PATH, params_to_update)
+    prepare_hydra_configs(
+        str(HYDRA_CONFIG_PATH), str(HYDRA_TEMP_CONFIG_PATH), params_to_update
+    )
 
     with initialize_config_dir(config_dir=str(HYDRA_TEMP_CONFIG_PATH)):
         cfg = compose(config_name="benchmark")

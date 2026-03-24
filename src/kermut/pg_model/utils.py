@@ -1,5 +1,5 @@
 import shutil
-import os
+from typing import Tuple
 
 import pandas as pd
 import yaml
@@ -135,3 +135,47 @@ def validate_dataset(df: pd.DataFrame, reference_sequence: str):
     if variant_matches_reference.any():
         raise ValueError("Dataframe contains variants identical to reference!")
 
+
+def torch_delete(tensor: torch.Tensor, indices: list) -> torch.Tensor:
+    indices_to_delete = torch.tensor(indices)
+    mask = torch.ones(tensor.shape[0], dtype=torch.bool)
+    mask[indices_to_delete] = False
+    return tensor[mask]
+
+
+def prune_isolated_nodes(
+    train_inputs: Tuple[torch.Tensor, ...],
+    train_targets: torch.Tensor,
+) -> Tuple[Tuple[torch.Tensor, ...], torch.Tensor]:
+    """
+    Apparently unnecessary. Also this function should update the dataframe, which it doesn't right now.
+    """
+
+    def compute_offset(idx, sorted_isolated):
+        return sum(1 for isolated in sorted_isolated if isolated < idx)
+
+    full_sample_indices = list(range(len(train_inputs[0])))
+    flattened_pairs = [int(idx) for pair in train_targets for idx in pair]
+    observed_comparison_indices = set(flattened_pairs)
+    isolated_node_indices = list(
+        set(full_sample_indices).difference(observed_comparison_indices)
+    )
+    if len(isolated_node_indices) > 0:
+        logger.info(f"Pruning {len(isolated_node_indices)} isolated nodes.")
+        sorted_isolated = sorted(isolated_node_indices)
+        updated_flattened_pairs = [
+            idx - compute_offset(idx, sorted_isolated) for idx in flattened_pairs
+        ]
+        updated_pairs = torch.tensor(
+            [
+                (updated_flattened_pairs[i], updated_flattened_pairs[i + 1])
+                for i in range(0, len(updated_flattened_pairs), 2)
+            ]
+        )
+        updated_train_inputs = tuple(
+            [torch_delete(inp, isolated_node_indices) for inp in train_inputs]
+        )
+        return updated_train_inputs, updated_pairs
+    else:
+        logger.info(f"No isolated nodes to prune.")
+        return train_inputs, train_targets

@@ -40,6 +40,8 @@ def instantiate_gp(
     """
     device = "cuda" if cfg.use_gpu and torch.cuda.is_available() else "cpu"
     composite = cfg.kernel.use_structure_kernel and cfg.kernel.use_sequence_kernel
+    from loguru import logger
+
     train_inputs = tuple([x for x in train_inputs if x is not None])
 
     if cfg.preferential:
@@ -48,6 +50,7 @@ def instantiate_gp(
         ]
         input_shapes = [x.shape for x in train_inputs if x is not None]
         train_inputs = torch.cat(train_inputs, dim=1)
+
         gp = PKermutGP(
             train_inputs,
             train_targets,
