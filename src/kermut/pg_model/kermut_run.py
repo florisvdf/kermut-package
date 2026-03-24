@@ -21,10 +21,10 @@ from kermut.kermut.gp import instantiate_gp, optimize_gp, predict
 from kermut.pg_model.scripts.precompute_artifacts import precompute_artifacts
 from kermut.pg_model.utils import (
     assign_mutant_column,
-    validate_dataset,
     set_torch_dtype,
     prepare_hydra_configs,
     log_and_save_metrics,
+    add_pseudo_if_variant_matches_reference
 )
 from kermut.pg_model.pair_sampling import pair_sampling_factory
 from kermut.pg_model.constants import HYDRA_CONFIG_PATH, HYDRA_TEMP_CONFIG_PATH
@@ -193,9 +193,12 @@ def main(
     dataset_path = str(Path(data_dir) / f"{dataset_name}.csv")
     df = pd.read_csv(dataset_path)
     df = assign_mutant_column(df, reference_sequence)
-    validate_dataset(df, reference_sequence)
     df.rename(columns={target: "target"}, inplace=True)
-    df.to_csv(dataset_path, index=False)
+    # Add a pseudo mutation to any sequences that match the reference sequence
+    pseudo_mask = df["sequence"] == reference_sequence
+    df = add_pseudo_if_variant_matches_reference(df, reference_sequence)
+    # Drop duplicates, as PKermut can't handle duplicate inputs
+    df.drop_duplicates(subset=["sequence"]).to_csv(dataset_path)
     if prepare_artifacts:
         logger.info("PDB file passed, computing necessary artifacts")
         _ = precompute_artifacts(
@@ -226,6 +229,11 @@ def main(
         _evaluate_dms(cfg)
 
     results = pd.read_csv(Path(output_path) / f"{dataset_name}.csv")
+    # Return to original size df again with possible duplicate sequences
+    results = df.merge(results[["sequence", "fold", "y", "y_pred", "y_var"]], on="sequence", how="left")
+    # Replace pseudo variants with reference
+    results.loc[pseudo_mask, "sequence"] = reference_sequence
+    logger.debug(results.columns)
     results.rename(columns={"y_var": "y_pred_var"}, inplace=True)
     results[["sequence", "split", "y", "y_pred", "y_pred_var"]].to_csv(
         Path(output_path) / "predictions.csv", index=False

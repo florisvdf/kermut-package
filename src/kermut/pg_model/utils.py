@@ -179,3 +179,25 @@ def prune_isolated_nodes(
     else:
         logger.info(f"No isolated nodes to prune.")
         return train_inputs, train_targets
+
+
+def add_pseudo_if_variant_matches_reference(
+    df: pd.DataFrame, reference_sequence: str
+) -> pd.DataFrame:
+    matches_reference = df[df["sequence"] == reference_sequence]
+    if len(matches_reference) > 0:
+        if reference_sequence[-1] == "G":
+            replacement_aa = "A"
+        else:
+            replacement_aa = "G"
+        modified_sequence = reference_sequence[:-1] + replacement_aa
+        logger.warning(
+            f"Found {len(matches_reference)} sequence(s) matching the reference sequence,"
+            f"replacing with pseudo variant: \n {modified_sequence}\n"
+            f"(mutating final residue to {replacement_aa})."
+        )
+        df = df.copy()
+        df.loc[df["sequence"] == reference_sequence, "sequence"] = modified_sequence
+        return df
+    else:
+        return df
