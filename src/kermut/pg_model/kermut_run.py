@@ -233,7 +233,6 @@ def main(
     results = df.merge(results[["sequence", "fold", "y", "y_pred", "y_var"]], on="sequence", how="left")
     # Replace pseudo variants with reference
     results.loc[pseudo_mask, "sequence"] = reference_sequence
-    logger.debug(results.columns)
     results.rename(columns={"y_var": "y_pred_var"}, inplace=True)
     results[["sequence", "split", "y", "y_pred", "y_pred_var"]].to_csv(
         Path(output_path) / "predictions.csv", index=False
