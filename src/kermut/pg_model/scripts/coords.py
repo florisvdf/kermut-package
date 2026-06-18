@@ -3,7 +3,7 @@ from typing import Annotated
 import typer
 
 import numpy as np
-from Bio.PDB import PDBParser
+import biotite.structure.io.pdb as pdb
 
 
 app = typer.Typer(
@@ -30,17 +30,10 @@ def extract_3d_coords(
     coords_dir = Path(coords_dir)
     coords_dir.mkdir(exist_ok=True, parents=True)
     out_path = coords_dir / f"{dataset_name}.npy"
-    structure_name = Path(pdb_file).stem
-    structure = PDBParser().get_structure(structure_name, pdb_file)
-
-    coords = []
-    for model in structure:
-        for chain in model:
-            for residue in chain:
-                for atom in residue:
-                    if atom.get_name() == "CA":
-                        coords.append(atom.get_coord())
-    coords = np.array(coords)
+    structure_file = pdb.PDBFile.read(pdb_file)
+    structure = structure_file.get_structure()
+    ca_atoms = structure[:, structure.atom_name == "CA"]
+    coords = ca_atoms.coord.squeeze()
     np.save(out_path, coords)
 
 

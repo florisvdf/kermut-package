@@ -22,7 +22,7 @@ def test_kermut_run(
 ):
     df = pd.read_csv(mini_dataset_path)
     mini_reference_sequence = read_fasta(mini_reference_sequence_path)
-    mini_structure = load_pdb_structure(mini_structure_path, mini_protein_name)
+    mini_structure = load_pdb_structure(mini_structure_path)
     with TemporaryDirectory() as temp_dir:
         dump_structure(str(Path(temp_dir) / f"{mini_protein_name}.pdb"), mini_structure)
         df.to_csv(str(Path(temp_dir) / f"{mini_protein_name}.csv"))

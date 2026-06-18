@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "biopython>=1.86",
+    "biotite>=1.6.0",
     "botorch>=0.17.2",
     "fair-esm>=2.0.0",
     "gpytorch>=1.15.2",

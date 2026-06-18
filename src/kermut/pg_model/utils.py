@@ -10,22 +10,19 @@ from loguru import logger
 import numpy as np
 from scipy.stats import spearmanr
 from sklearn.metrics import r2_score
-from Bio.PDB.PDBIO import PDBIO
-from Bio.PDB.PDBParser import PDBParser
-from Bio.PDB.Structure import Structure
+from biotite.structure.io import pdb, save_structure
+from biotite.structure import AtomArrayStack
 import torch
 
 
-def load_pdb_structure(pdb_path: str, structure_id: str) -> Structure:
-    parser = PDBParser(PERMISSIVE=1)
-    structure = parser.get_structure(structure_id, pdb_path)
+def load_pdb_structure(pdb_path: str) -> AtomArrayStack:
+    structure_file = pdb.PDBFile.read(pdb_path)
+    structure = structure_file.get_structure()
     return structure
 
 
-def dump_structure(path: str, structure: Structure) -> None:
-    io = PDBIO()
-    io.set_structure(structure)
-    io.save(path)
+def dump_structure(path: str, structure: AtomArrayStack) -> None:
+    save_structure(file_path=path, array=structure)
 
 
 def prepare_hydra_configs(
