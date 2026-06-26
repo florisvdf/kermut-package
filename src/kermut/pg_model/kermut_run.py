@@ -194,11 +194,20 @@ def main(
     df = pd.read_csv(dataset_path)
     df = assign_mutant_column(df, reference_sequence)
     df.rename(columns={target: "target"}, inplace=True)
+
+    # Store original df before any modifications
+    df_original = df.copy()
+    original_indices = df.index.to_list()
+
     # Add a pseudo mutation to any sequences that match the reference sequence
     pseudo_mask = df["sequence"] == reference_sequence
     df = add_pseudo_if_variant_matches_reference(df, reference_sequence)
+
     # Drop duplicates, as PKermut can't handle duplicate inputs
-    df.drop_duplicates(subset=["sequence"]).to_csv(dataset_path)
+    # Keep track of which rows were kept after deduplication
+    df_dedup = df.drop_duplicates(subset=["sequence"], keep='first')
+    df_dedup.to_csv(dataset_path)
+
     if prepare_artifacts:
         logger.info("PDB file passed, computing necessary artifacts")
         _ = precompute_artifacts(
@@ -229,15 +238,32 @@ def main(
         _evaluate_dms(cfg)
 
     results = pd.read_csv(Path(output_path) / f"{dataset_name}.csv")
-    # Return to original size df again with possible duplicate sequences
-    results = df.merge(results[["sequence", "fold", "y", "y_pred", "y_var"]], on="sequence", how="left")
-    # Replace pseudo variants with reference
-    results.loc[pseudo_mask, "sequence"] = reference_sequence
-    results.rename(columns={"y_var": "y_pred_var"}, inplace=True)
-    results[["sequence", "split", "y", "y_pred", "y_pred_var"]].to_csv(
+
+    # Merge with the deduplicated df first to get the pseudo-mutated sequences
+    results_with_pseudo = df_dedup.merge(
+        results[["sequence", "fold", "y", "y_pred", "y_var"]],
+        on="sequence",
+        how="left"
+    )
+
+    # Now merge with the original df to restore all rows (including duplicates)
+    # Match by the original sequence values before pseudo mutation
+    df_original['_temp_seq'] = df['sequence']  # The pseudo-mutated sequence
+    results_final = df_original.merge(
+        results_with_pseudo.rename(columns={'sequence': '_temp_seq'}),
+        on='_temp_seq',
+        how='left',
+        suffixes=('', '_pred')
+    )
+
+    # Clean up and restore reference sequence
+    results_final.drop(columns=['_temp_seq'], inplace=True)
+    results_final.loc[pseudo_mask, "sequence"] = reference_sequence
+    results_final.rename(columns={"y_var": "y_pred_var"}, inplace=True)
+    results_final[["sequence", "split", "y", "y_pred", "y_pred_var"]].to_csv(
         Path(output_path) / "predictions.csv", index=False
     )
-    log_and_save_metrics(results, str(output_path))
+    log_and_save_metrics(results_final, str(output_path))
 
 
 if __name__ == "__main__":
