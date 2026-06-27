@@ -197,7 +197,6 @@ def main(
 
     # Store original df before any modifications
     df_original = df.copy()
-    original_indices = df.index.to_list()
 
     # Add a pseudo mutation to any sequences that match the reference sequence
     pseudo_mask = df["sequence"] == reference_sequence
